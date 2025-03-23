@@ -1,5 +1,4 @@
 import { readFileSync } from 'fs';
-import readline from 'readline';
 
 enum TokenType {
   LEFT_PAREN, RIGHT_PAREN, LEFT_BRACE, RIGHT_BRACE,
@@ -18,61 +17,148 @@ enum TokenType {
   EOF
 };
 
+const KEYWORDS_MAP = {
+  "AND": TokenType.AND,
+  "CLASS": TokenType.CLASS,
+  "ELSE": TokenType.ELSE,
+  "FALSE": TokenType.FALSE,
+  "FUN": TokenType.FUN,
+  "FOR": TokenType.FOR,
+  "IF": TokenType.IF,
+  "NIL": TokenType.NIL,
+  "OR": TokenType.OR,
+  "PRINT": TokenType.PRINT,
+  "RETURN": TokenType.RETURN,
+  "SUPER": TokenType.SUPER,
+  "THIS": TokenType.THIS,
+  "TRUE": TokenType.TRUE,
+  "VAR": TokenType.VAR,
+  "WHILE": TokenType.WHILE
+}
+
 interface Token {
   type: TokenType;
   lexeme: string;
   line: number;
 };
 
+const isDigit = (c: string) => /\d/.test(c)
+
+const isAlpha = (c: string) => /[a-zA-Z]/.test(c)
+
 // Pretty prints a provided error message.
-const reportErr = (line: number, where: string, message: string) => {
-  console.error(`[line ${line}] Error ${where}: ${message}`);
+const reportErr = (line: number, message: string) => {
+  console.error(`[line ${line}] Error: ${message}`);
 };
 
-const scanToken = (lexeme: string): TokenType => {
-  if (lexeme.length === 1) {
-    switch (lexeme) {
-      case '(': return TokenType.LEFT_PAREN;
-      case ')': return TokenType.RIGHT_PAREN;
-      case '{': return TokenType.LEFT_BRACE;
-      case '}': return TokenType.RIGHT_BRACE;
-      case ',': return TokenType.COMMA;
-      case '.': return TokenType.DOT;
-      case '-': return TokenType.MINUS;
-      case '+': return TokenType.PLUS;
-      case ';': return TokenType.SEMICOLON;
-      case '*': return TokenType.STAR;
-    }
+
+
+// Takes in a script, tokenises it and returns the resulting array.
+const scanTokens = (script: string): Token[] => {
+
+  const tokens: Token[] = [];
+  let startChar = 0;
+  let currentChar = 0;
+  let line = 1;
+
+  const eof = (): boolean => currentChar >= script.length;
+
+  const newToken = (type: TokenType) => {
+    tokens.push({
+      type,
+      lexeme: script.substring(startChar, currentChar),
+      line
+    });
   }
-  if (lexeme.length === 2) {
-    switch (lexeme) {
-      case '!': return TokenType.BANG;
-      case '!=': return TokenType.BANG_EQUAL;
-      case '=': return TokenType.EQUAL;
-      case '==': return TokenType.EQUAL_EQUAL;
-      case '>': return TokenType.GREATER;
-      case '>=': return TokenType.GREATER_EQUAL;
-      case '<': return TokenType.LESS;
-      case '<=': return TokenType.LESS_EQUAL;
+
+  const matchNext = (expected: string): boolean => {
+    if (eof()) return false;
+    if (script[currentChar] != expected) return false;
+    currentChar++;
+    return true;
+  }
+
+  const scanToken = () => {
+    const character = script[currentChar++];
+    switch (character) {
+      case '(': newToken(TokenType.LEFT_PAREN); break;
+      case ')': newToken(TokenType.RIGHT_PAREN); break;
+      case '{': newToken(TokenType.LEFT_BRACE); break;
+      case '}': newToken(TokenType.RIGHT_BRACE); break;
+      case ',': newToken(TokenType.COMMA); break;
+      case '.': newToken(TokenType.DOT); break;
+      case '-': newToken(TokenType.MINUS); break;
+      case '+': newToken(TokenType.PLUS); break;
+      case ';': newToken(TokenType.SEMICOLON); break;
+      case '*': newToken(TokenType.STAR); break;
+      case '!': newToken(matchNext('=') ? TokenType.BANG_EQUAL : TokenType.BANG); break;
+      case '=': newToken(matchNext('=') ? TokenType.EQUAL_EQUAL : TokenType.EQUAL); break;
+      case '<': newToken(matchNext('=') ? TokenType.LESS_EQUAL : TokenType.LESS); break;
+      case '>': newToken(matchNext('=') ? TokenType.GREATER_EQUAL : TokenType.GREATER); break;
+      case '/':
+        if (matchNext('/')) {
+          // Comment that goes to the end of the line.
+          while (!eof() && script[currentChar] != '\n') currentChar++;
+          break;
+        }
+        newToken(TokenType.SLASH);
+        break;
+      case '"':
+        while (script[currentChar] != '"' && !eof()) {
+          if (eof()) reportErr(line, 'Unterminated string.');
+          if (script[currentChar] == '\n') line++;
+          currentChar++;
+        }
+        currentChar++;
+        newToken(TokenType.STRING);
+        break;
+      case ' ':
+      case '\r':
+      case '\t':
+        break;
+      case '\n':
+        line++;
+        break;
+      default:
+        if (isDigit(character)) {
+          while (isDigit(script[currentChar])) currentChar++;
+          if (currentChar + 1 < script.length && matchNext('.') && isDigit(script[currentChar + 1])) {
+            currentChar++;
+            while (isDigit(script[currentChar])) currentChar++;
+          }
+          newToken(TokenType.NUMBER);
+          break;
+        }
+        if (isAlpha(character)) {
+          while (isAlpha(script[currentChar])) currentChar++;
+          const keyword = script.substring(startChar, currentChar).toUpperCase();
+          if (keyword in KEYWORDS_MAP) newToken(KEYWORDS_MAP[keyword]); else newToken(TokenType.IDENTIFIER);
+          break;
+        }
+        reportErr(line, 'Unexpected character.');
+        break;
     }
   }
 
+  while (!eof()) {
+    scanToken();
+    startChar = currentChar;
+  }
+
+  tokens.push({
+    type: TokenType.EOF,
+    lexeme: '',
+    line
+  });
+
+  return tokens;
 }
 
-// Takes in a string, tokenises it and returns the resulting array.
-const scanTokens = (script: string): Token[] => {
-  const tokens: Token[] = [];
-  const lexemes = script.split(' ');
-  for (const lex in lexemes) {
-  }
-};
 
 // Interprets a provided script.
 const runScript = (script: string) => {
   const tokens: Token[] = scanTokens(script);
-  for (const i in tokens) {
-    console.log(i);
-  }
+  console.log(tokens); // just for now
 };
 
 // Loads up a file and runs the whole thing.
@@ -83,16 +169,19 @@ const runFile = (fileLocation: string) => {
 
 // Processing for the user REPL.
 const repl = () => {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  let user_input: string = '';
-  while (true) {
-    rl.question('lox> ', (command: string) => user_input = command);
-    if (user_input === '') { continue; }
-    runScript(user_input);
-  }
+  process.stdin.setEncoding('utf8');
+  process.stdin.resume();
+  process.stdout.write('lox> ');
+  process.stdin.on('data', (data) => {
+    const command = data.toString().trim();
+    if (command.toUpperCase() === 'EXIT') {
+      console.log('Exiting...');
+      process.exit(0);
+    }
+    runScript(command);
+
+    process.stdout.write('lox> ');
+  })
 };
 
 const main = (args: string[]) => {
