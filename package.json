@@ -4,7 +4,9 @@
   "description": "TypeScript implementation of the Lox programming language.",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc src/index.ts",
+    "build": "tsc src/*.ts",
+    "pretty": "prettier . --write",
+    "lint": "eslint .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
